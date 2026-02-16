@@ -1,0 +1,21 @@
+{
+  "short_name": "Conexão",
+  "name": "Conexão - Performance",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/7f1d1d/ffffff/png?text=C",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://placehold.co/512x512/7f1d1d/ffffff/png?text=Conexao",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#FFF5F5",
+  "background_color": "#FFF5F5",
+  "orientation": "portrait"
+}
