@@ -101,6 +101,9 @@ const HeaderLogo = () => (
 );
 
 const App: React.FC = () => {
+  // Helpers
+  const todayStr = new Date().toISOString().split('T')[0];
+
   // State
   const [hasEntered, setHasEntered] = useState(false);
   const [records, setRecords] = useState<Record[]>([]);
@@ -108,6 +111,9 @@ const App: React.FC = () => {
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
   
+  // Controls which date we are currently editing
+  const [editingDate, setEditingDate] = useState<string>(todayStr);
+
   // Check-in Form State
   const [checkinLibido, setCheckinLibido] = useState<number>(3);
   
@@ -185,23 +191,26 @@ const App: React.FC = () => {
     }
   }, [records]);
 
-  // Helpers
-  const todayStr = new Date().toISOString().split('T')[0];
   const todayRecord = records.find(r => r.date === todayStr);
 
-  const handleOpenCheckin = () => {
-    if (todayRecord) {
-      setCheckinLibido(todayRecord.libido);
+  const handleOpenCheckin = (dateToEdit?: string) => {
+    const targetDate = dateToEdit || todayStr;
+    setEditingDate(targetDate);
+
+    const existingRecord = records.find(r => r.date === targetDate);
+
+    if (existingRecord) {
+      setCheckinLibido(existingRecord.libido);
       setCheckinActivities({
-        hadSex: todayRecord.hadSex,
-        masturbated: todayRecord.masturbated,
-        usedTadala: todayRecord.usedTadala,
+        hadSex: existingRecord.hadSex,
+        masturbated: existingRecord.masturbated,
+        usedTadala: existingRecord.usedTadala,
       });
       setCheckinPartner({
-        periodStarts: todayRecord.periodStarts || false,
-        periodEnds: todayRecord.periodEnds || todayRecord.periodEnded || false,
-        medsStarts: todayRecord.medsStarts || false,
-        medsEnds: todayRecord.medsEnds || false
+        periodStarts: existingRecord.periodStarts || false,
+        periodEnds: existingRecord.periodEnds || existingRecord.periodEnded || false,
+        medsStarts: existingRecord.medsStarts || false,
+        medsEnds: existingRecord.medsEnds || false
       });
     } else {
       setCheckinLibido(3);
@@ -212,9 +221,13 @@ const App: React.FC = () => {
   };
 
   const handleSaveCheckin = () => {
+    // Find existing record for the editing date to keep ID if possible
+    const existingIndex = records.findIndex(r => r.date === editingDate);
+    const existingRecord = existingIndex > -1 ? records[existingIndex] : null;
+
     const newRecord: Record = {
-      id: todayRecord ? todayRecord.id : Date.now().toString(),
-      date: todayStr,
+      id: existingRecord ? existingRecord.id : Date.now().toString(),
+      date: editingDate,
       libido: checkinLibido,
       ...checkinActivities,
       periodStarts: checkinPartner.periodStarts,
@@ -222,14 +235,13 @@ const App: React.FC = () => {
       periodEnded: checkinPartner.periodEnds, 
       medsStarts: checkinPartner.medsStarts,
       medsEnds: checkinPartner.medsEnds,
-      timestamp: Date.now()
+      timestamp: new Date(editingDate + 'T12:00:00').getTime()
     };
 
     let updatedRecords = [...records];
-    const index = updatedRecords.findIndex(r => r.date === todayStr);
     
-    if (index > -1) {
-      updatedRecords[index] = newRecord;
+    if (existingIndex > -1) {
+      updatedRecords[existingIndex] = newRecord;
     } else {
       updatedRecords.push(newRecord);
     }
@@ -338,56 +350,70 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderCheckinModal = () => (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-[40px] p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-black text-gray-900">Check-in Diário</h2>
-          <button onClick={() => setIsCheckinOpen(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200">
-            <XIcon size={24} strokeWidth={3} />
+  const renderCheckinModal = () => {
+    // Format the date being edited for the title
+    const dateObj = new Date(editingDate + 'T12:00:00');
+    const isToday = editingDate === todayStr;
+    const dateTitle = isToday 
+      ? "Check-in de Hoje" 
+      : `Check-in: ${dateObj.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white w-full max-w-md rounded-[40px] p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-black text-gray-900">{dateTitle}</h2>
+              {!isToday && <p className="text-xs text-red-500 font-bold uppercase tracking-wider">Registro Retroativo</p>}
+            </div>
+            <button onClick={() => setIsCheckinOpen(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200">
+              <XIcon size={24} strokeWidth={3} />
+            </button>
+          </div>
+          {/* Same Checkin Content as before, keeping functionality */}
+          <div className="mb-6">
+            <p className="text-lg font-bold text-gray-500 mb-3 text-center">Nível de desejo (Você)</p>
+            <div className="flex justify-between gap-1 bg-gray-50 p-2 rounded-3xl">
+              {[1, 2, 3, 4, 5].map((level) => (
+                <button key={level} onClick={() => setCheckinLibido(level)} className={`flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-200 border-4 ${checkinLibido === level ? 'border-transparent scale-110 shadow-lg text-white' : 'border-transparent text-gray-300 hover:bg-gray-100'}`} style={{ backgroundColor: checkinLibido === level ? LIBIDO_LEVELS[level].color : 'transparent' }}>
+                  {LIBIDO_LEVELS[level].icon}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-6">
+            <p className="text-lg font-bold text-gray-500 mb-3 text-center">Suas Atividades</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => toggleActivity('hadSex')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.hadSex ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-red-100'}`}>
+                <Heart size={24} fill={checkinActivities.hadSex ? "currentColor" : "none"} strokeWidth={3} />
+                <span className="font-bold text-xs">Transamos</span>
+              </button>
+              <button onClick={() => toggleActivity('masturbated')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.masturbated ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-orange-100'}`}>
+                <User size={24} strokeWidth={3} />
+                <span className="font-bold text-xs">Solo</span>
+              </button>
+              <button onClick={() => toggleActivity('usedTadala')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.usedTadala ? 'bg-slate-700 border-slate-700 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-slate-100'}`}>
+                <Pill size={24} strokeWidth={3} />
+                <span className="font-bold text-xs">Tadala</span>
+              </button>
+            </div>
+          </div>
+          <div className="mb-8 bg-rose-50 p-4 rounded-3xl border border-rose-100">
+             <p className="text-lg font-bold text-rose-500 mb-3 text-center flex items-center justify-center gap-2"><CalendarHeart size={20} /> Ciclo da Marcelly</p>
+             <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => togglePartner('periodStarts')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.periodStarts ? 'bg-rose-600 border-rose-600 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-rose-200'}`}><Droplets size={24} strokeWidth={3} /><span className="font-bold text-xs">Desceu</span></button>
+                <button onClick={() => togglePartner('periodEnds')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.periodEnds ? 'bg-yellow-500 border-yellow-500 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-yellow-200'}`}><Sparkles size={24} strokeWidth={3} /><span className="font-bold text-xs">Acabou</span></button>
+                <button onClick={() => togglePartner('medsStarts')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.medsStarts ? 'bg-blue-500 border-blue-500 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-blue-200'}`}><PlayCircle size={24} strokeWidth={3} /><span className="font-bold text-xs">Retomou Med</span></button>
+                <button onClick={() => togglePartner('medsEnds')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.medsEnds ? 'bg-orange-400 border-orange-400 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-orange-200'}`}><StopCircle size={24} strokeWidth={3} /><span className="font-bold text-xs">Iniciou Pausa</span></button>
+             </div>
+          </div>
+          <button onClick={handleSaveCheckin} className="w-full py-5 bg-gray-900 text-white rounded-3xl text-xl font-black uppercase tracking-wide shadow-xl active:scale-95 transition-transform">
+            {isToday ? "Salvar Hoje" : "Salvar Histórico"}
           </button>
         </div>
-        {/* Same Checkin Content as before, keeping functionality */}
-        <div className="mb-6">
-          <p className="text-lg font-bold text-gray-500 mb-3 text-center">Nível de desejo (Você)</p>
-          <div className="flex justify-between gap-1 bg-gray-50 p-2 rounded-3xl">
-            {[1, 2, 3, 4, 5].map((level) => (
-              <button key={level} onClick={() => setCheckinLibido(level)} className={`flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-200 border-4 ${checkinLibido === level ? 'border-transparent scale-110 shadow-lg text-white' : 'border-transparent text-gray-300 hover:bg-gray-100'}`} style={{ backgroundColor: checkinLibido === level ? LIBIDO_LEVELS[level].color : 'transparent' }}>
-                {LIBIDO_LEVELS[level].icon}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mb-6">
-          <p className="text-lg font-bold text-gray-500 mb-3 text-center">Suas Atividades</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => toggleActivity('hadSex')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.hadSex ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-red-100'}`}>
-              <Heart size={24} fill={checkinActivities.hadSex ? "currentColor" : "none"} strokeWidth={3} />
-              <span className="font-bold text-xs">Transamos</span>
-            </button>
-            <button onClick={() => toggleActivity('masturbated')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.masturbated ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-orange-100'}`}>
-              <User size={24} strokeWidth={3} />
-              <span className="font-bold text-xs">Solo</span>
-            </button>
-            <button onClick={() => toggleActivity('usedTadala')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinActivities.usedTadala ? 'bg-slate-700 border-slate-700 text-white shadow-md' : 'bg-white border-gray-100 text-gray-400 hover:border-slate-100'}`}>
-              <Pill size={24} strokeWidth={3} />
-              <span className="font-bold text-xs">Tadala</span>
-            </button>
-          </div>
-        </div>
-        <div className="mb-8 bg-rose-50 p-4 rounded-3xl border border-rose-100">
-           <p className="text-lg font-bold text-rose-500 mb-3 text-center flex items-center justify-center gap-2"><CalendarHeart size={20} /> Ciclo da Marcelly</p>
-           <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => togglePartner('periodStarts')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.periodStarts ? 'bg-rose-600 border-rose-600 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-rose-200'}`}><Droplets size={24} strokeWidth={3} /><span className="font-bold text-xs">Desceu</span></button>
-              <button onClick={() => togglePartner('periodEnds')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.periodEnds ? 'bg-yellow-500 border-yellow-500 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-yellow-200'}`}><Sparkles size={24} strokeWidth={3} /><span className="font-bold text-xs">Acabou</span></button>
-              <button onClick={() => togglePartner('medsStarts')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.medsStarts ? 'bg-blue-500 border-blue-500 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-blue-200'}`}><PlayCircle size={24} strokeWidth={3} /><span className="font-bold text-xs">Retomou Med</span></button>
-              <button onClick={() => togglePartner('medsEnds')} className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${checkinPartner.medsEnds ? 'bg-orange-400 border-orange-400 text-white shadow-md' : 'bg-white border-white text-gray-400 hover:border-orange-200'}`}><StopCircle size={24} strokeWidth={3} /><span className="font-bold text-xs">Iniciou Pausa</span></button>
-           </div>
-        </div>
-        <button onClick={handleSaveCheckin} className="w-full py-5 bg-gray-900 text-white rounded-3xl text-xl font-black uppercase tracking-wide shadow-xl active:scale-95 transition-transform">Salvar Dia</button>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderDashboard = () => {
     const year = currentDate.getFullYear();
@@ -418,7 +444,7 @@ const App: React.FC = () => {
         {/* HERO CARD: "Registrar" (Red) or "Status" (White) */}
         {!todayRecord ? (
           <button 
-            onClick={handleOpenCheckin}
+            onClick={() => handleOpenCheckin(todayStr)}
             className="w-full bg-[#c62828] text-white rounded-[40px] p-8 shadow-xl shadow-red-900/20 relative overflow-hidden group active:scale-[0.98] transition-all flex flex-col items-center justify-center text-center gap-4 min-h-[220px]"
           >
              {/* Glossy top */}
@@ -437,7 +463,7 @@ const App: React.FC = () => {
              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-full h-20 bg-red-500 blur-3xl opacity-50" />
           </button>
         ) : (
-          <div onClick={handleOpenCheckin} className="bg-white p-6 rounded-[40px] shadow-lg shadow-gray-200/50 border border-gray-100 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
+          <div onClick={() => handleOpenCheckin(todayStr)} className="bg-white p-6 rounded-[40px] shadow-lg shadow-gray-200/50 border border-gray-100 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all">
              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity text-red-600"><Edit3 size={40} /></div>
              <div className="flex items-center gap-4 mb-4">
                <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg" style={{ backgroundColor: LIBIDO_LEVELS[todayRecord.libido].color }}>
@@ -542,17 +568,14 @@ const App: React.FC = () => {
                const rec = records.find(r => r.date === dStr);
                const isToday = dStr === todayStr;
                
-               // Styling logic based on screenshot
-               // Selected/Record days have red backgrounds
-               // Today is black if no record? Or handle click
                const hasRecord = !!rec;
                
                return (
                  <div 
                     key={day} 
-                    onClick={() => { if(dStr === todayStr) handleOpenCheckin(); }}
+                    onClick={() => handleOpenCheckin(dStr)}
                     className={`
-                      aspect-square flex flex-col items-center justify-center rounded-xl relative transition-all cursor-default
+                      aspect-square flex flex-col items-center justify-center rounded-xl relative transition-all cursor-pointer hover:scale-105 active:scale-95
                       ${hasRecord 
                         ? 'bg-[#ef4444] text-white shadow-md shadow-red-500/20' 
                         : isToday 
