@@ -668,8 +668,8 @@ const App: React.FC = () => {
            </div>
            
            <div className="grid grid-cols-7 mb-6 text-center">
-             {['D','S','T','Q','Q','S','S'].map(d => (
-               <div key={d} className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{d}</div>
+             {['D','S','T','Q','Q','S','S'].map((d, index) => (
+               <div key={`weekday-${index}`} className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{d}</div>
              ))}
            </div>
 
