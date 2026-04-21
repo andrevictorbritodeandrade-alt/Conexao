@@ -1,5 +1,8 @@
-import * as React from 'react';
-const { useState, useEffect } = React;
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, doc, setDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
+import firebaseConfig from './firebase-applet-config.json';
 import { 
   ResponsiveContainer, AreaChart, Area, Tooltip, XAxis, YAxis, CartesianGrid
 } from 'recharts';
@@ -9,7 +12,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Activity, 
-  User, 
+  User as UserIcon, 
   Flame, 
   Pill, 
   Droplets,
@@ -29,8 +32,61 @@ import {
   Cloud,
   Check,
   ArrowRight,
-  Smartphone
+  Smartphone,
+  LogOut,
+  LogIn,
+  AlertCircle
 } from 'lucide-react';
+
+// --- Firebase Initialization ---
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth();
+
+// --- Error Handling ---
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
+  path: string | null;
+  authInfo: {
+    userId: string;
+    email: string;
+    emailVerified: boolean;
+    isAnonymous: boolean;
+    providerInfo: { providerId: string; displayName: string; email: string; }[];
+  }
+}
+
+const handleFirestoreError = (error: any, operationType: FirestoreErrorInfo['operationType'], path: string | null = null) => {
+  console.error(`Firestore Error (${operationType}):`, error);
+  if (error.code === 'permission-denied') {
+    const user = auth.currentUser;
+    const errorInfo: FirestoreErrorInfo = {
+      error: error.message,
+      operationType,
+      path,
+      authInfo: user ? {
+        userId: user.uid,
+        email: user.email || '',
+        emailVerified: user.emailVerified,
+        isAnonymous: user.isAnonymous,
+        providerInfo: user.providerData.map(p => ({
+          providerId: p.providerId,
+          displayName: p.displayName || '',
+          email: p.email || ''
+        }))
+      } : {
+        userId: 'anonymous',
+        email: '',
+        emailVerified: false,
+        isAnonymous: true,
+        providerInfo: []
+      }
+    };
+    throw new Error(JSON.stringify(errorInfo));
+  }
+  throw error;
+};
 
 // --- Types ---
 interface Record {
@@ -84,6 +140,8 @@ const App: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   // State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [records, setRecords] = useState<Record[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
@@ -110,72 +168,115 @@ const App: React.FC = () => {
     medsEnds: false
   });
 
-  // Load Data with Fallback
+  // Auth Listener
   useEffect(() => {
-    const saved = localStorage.getItem('conexao_v7_data');
-    const currentYear = new Date().getFullYear();
-
-    // Calculate Yesterday for Initial Data
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
-
-    // Create the "Yesterday" record (Only used if no data exists)
-    const yesterdayRequest: Record = {
-      id: 'yesterday-manual-' + Date.now(),
-      date: yesterdayStr,
-      hadSex: false, // User said no sex in April
-      libido: 3, 
-      masturbated: false,
-      usedTadala: false,
-      periodEnded: false,
-      timestamp: yesterdayDate.getTime()
-    };
-
-    if (saved) {
-      try {
-        const loadedRecords = JSON.parse(saved);
-        setRecords(loadedRecords);
-      } catch (e) {
-        console.error("Erro ao carregar, reiniciando dados", e);
-        setRecords([yesterdayRequest]);
-      }
-    } else {
-      // Initialize with user's requested data (10 times this year)
-      const initialData: Record[] = [
-        // March (3 times: 24, 25 and another)
-        { id: 'm1', date: `${currentYear}-03-24`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-24`) },
-        { id: 'm2', date: `${currentYear}-03-25`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-25`) },
-        { id: 'm3', date: `${currentYear}-03-10`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-10`) },
-        
-        // Jan/Feb (Remaining 7 times)
-        { id: 'f1', date: `${currentYear}-02-20`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-20`) },
-        { id: 'f2', date: `${currentYear}-02-12`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-12`) },
-        { id: 'f3', date: `${currentYear}-02-02`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-02`) },
-        { id: 'j1', date: `${currentYear}-01-28`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-28`) },
-        { id: 'j2', date: `${currentYear}-01-15`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-15`) },
-        { id: 'j3', date: `${currentYear}-01-08`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-08`) },
-        { id: 'j4', date: `${currentYear}-01-02`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-02`) },
-        
-        yesterdayRequest
-      ];
-      setRecords(initialData);
-    }
+    return onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+    });
   }, []);
 
-  // Save Data Persistence
+  // Sync with Firestore
   useEffect(() => {
-    if (records.length > 0) {
+    if (!currentUser) {
+      // If not logged in, load from localStorage if available
+      const saved = localStorage.getItem('conexao_v7_data');
+      if (saved) {
+        try {
+          const loadedRecords = JSON.parse(saved);
+          setRecords(loadedRecords);
+        } catch (e) {
+          console.error("Erro ao carregar do localStorage", e);
+        }
+      } else {
+        // Default initial data logic if needed
+        const currentYear = new Date().getFullYear();
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+        const initialData: Record[] = [
+          { id: 'm1', date: `${currentYear}-03-24`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-24`) },
+          { id: 'm2', date: `${currentYear}-03-25`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-25`) },
+          { id: 'm3', date: `${currentYear}-03-10`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-10`) },
+          { id: 'f1', date: `${currentYear}-02-20`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-20`) },
+          { id: 'f2', date: `${currentYear}-02-12`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-12`) },
+          { id: 'f3', date: `${currentYear}-02-02`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-02-02`) },
+          { id: 'j1', date: `${currentYear}-01-28`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-28`) },
+          { id: 'j2', date: `${currentYear}-01-15`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-15`) },
+          { id: 'j3', date: `${currentYear}-01-08`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-08`) },
+          { id: 'j4', date: `${currentYear}-01-02`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-01-02`) },
+          { 
+            id: 'yesterday-' + Date.now(),
+            date: yesterdayStr,
+            hadSex: false,
+            libido: 3,
+            masturbated: false,
+            usedTadala: false,
+            periodEnded: false,
+            timestamp: yesterdayDate.getTime()
+          }
+        ];
+        setRecords(initialData);
+      }
+      return;
+    }
+
+    // Real-time Firestore Sync
+    const recordsRef = collection(db, 'users', currentUser.uid, 'records');
+    const q = query(recordsRef, orderBy('timestamp', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbRecords = snapshot.docs.map(doc => doc.data() as Record);
+      setRecords(dbRecords);
+    }, (error) => {
+      handleFirestoreError(error, 'list', `/users/${currentUser.uid}/records`);
+    });
+
+    // Check for localStorage migration
+    const saved = localStorage.getItem('conexao_v7_data');
+    if (saved) {
+      try {
+        const loadedRecords = JSON.parse(saved) as Record[];
+        if (loadedRecords.length > 0) {
+          // Migration logic: upload each record to Firestore
+          loadedRecords.forEach(async (rec) => {
+            await setDoc(doc(db, 'users', currentUser.uid, 'records', rec.id), rec);
+          });
+          // Clear migration once started (Firestore listener will handle state)
+          localStorage.removeItem('conexao_v7_data');
+        }
+      } catch (e) {
+        console.error("Migration error", e);
+      }
+    }
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Save Data Persistence (Only for Logged Out users)
+  useEffect(() => {
+    if (!currentUser && records.length > 0) {
       setSaveStatus('saving');
       localStorage.setItem('conexao_v7_data', JSON.stringify(records));
-      
-      const timer = setTimeout(() => {
-        setSaveStatus('saved');
-      }, 600);
-      
+      const timer = setTimeout(() => setSaveStatus('saved'), 600);
       return () => clearTimeout(timer);
     }
-  }, [records]);
+  }, [records, currentUser]);
+
+  const handleSignIn = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      console.error("Login failed", e);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (window.confirm("Deseja sair da conta?")) {
+      await signOut(auth);
+    }
+  };
 
   const todayRecord = records.find(r => r.date === todayStr);
 
@@ -206,13 +307,16 @@ const App: React.FC = () => {
     setIsCheckinOpen(true);
   };
 
-  const handleSaveCheckin = () => {
+  const handleSaveCheckin = async () => {
+    setSaveStatus('saving');
     // Find existing record for the editing date to keep ID if possible
     const existingIndex = records.findIndex(r => r.date === editingDate);
     const existingRecord = existingIndex > -1 ? records[existingIndex] : null;
 
+    const recordId = existingRecord ? existingRecord.id : Date.now().toString();
+
     const newRecord: Record = {
-      id: existingRecord ? existingRecord.id : Date.now().toString(),
+      id: recordId,
       date: editingDate,
       libido: checkinLibido,
       ...checkinActivities,
@@ -224,15 +328,23 @@ const App: React.FC = () => {
       timestamp: new Date(editingDate + 'T12:00:00').getTime()
     };
 
-    let updatedRecords = [...records];
-    
-    if (existingIndex > -1) {
-      updatedRecords[existingIndex] = newRecord;
+    if (currentUser) {
+      try {
+        await setDoc(doc(db, 'users', currentUser.uid, 'records', recordId), newRecord);
+      } catch (error) {
+        handleFirestoreError(error, 'write', `/users/${currentUser.uid}/records/${recordId}`);
+      }
     } else {
-      updatedRecords.push(newRecord);
+      let updatedRecords = [...records];
+      if (existingIndex > -1) {
+        updatedRecords[existingIndex] = newRecord;
+      } else {
+        updatedRecords.push(newRecord);
+      }
+      setRecords(updatedRecords);
     }
 
-    setRecords(updatedRecords);
+    setSaveStatus('saved');
     setIsCheckinOpen(false);
   };
 
@@ -372,7 +484,7 @@ const App: React.FC = () => {
                   <span className="font-black text-[10px] uppercase tracking-widest">Transa</span>
                 </button>
                 <button onClick={() => toggleActivity('masturbated')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.masturbated ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-white border-slate-100 text-slate-400 hover:border-orange-100'}`}>
-                  <User size={24} strokeWidth={3} />
+                  <UserIcon size={24} strokeWidth={3} />
                   <span className="font-black text-[10px] uppercase tracking-widest">Solo</span>
                 </button>
                 <button onClick={() => toggleActivity('usedTadala')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.usedTadala ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
@@ -681,7 +793,7 @@ const App: React.FC = () => {
                          )}
                          {rec.masturbated && (
                            <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-orange-100">
-                              <User size={10} /> SOLO
+                              <UserIcon size={10} /> SOLO
                            </span>
                          )}
                          {rec.usedTadala && (
@@ -742,9 +854,37 @@ const App: React.FC = () => {
            )}
         </div>
         <div className="flex items-center gap-3">
+          {currentUser ? (
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-right">
+                <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">André Brito</p>
+                <p className="text-[8px] font-bold text-brand-500 uppercase tracking-tighter mt-1">Conectado</p>
+              </div>
+              <button 
+                onClick={handleSignOut}
+                className="w-10 h-10 rounded-2xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-brand-50 hover:text-brand-600 transition-all shadow-sm active:scale-90"
+                title="Sair"
+              >
+                <LogOut size={18} strokeWidth={2.5} />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleSignIn}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-600 text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all active:scale-95"
+            >
+              <LogIn size={14} /> Entrar
+            </button>
+          )}
           <button 
             onClick={() => {
               if (window.confirm("Deseja realmente limpar todos os dados e carregar o histórico padrão?")) {
+                if (currentUser) {
+                  // If logged in, clear Firestore (expensive but user requested)
+                  records.forEach(async (r) => {
+                    await deleteDoc(doc(db, 'users', currentUser.uid, 'records', r.id));
+                  });
+                }
                 localStorage.removeItem('conexao_v7_data');
                 window.location.reload();
               }
@@ -758,7 +898,41 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-md mx-auto p-4 pt-6 flex-1 w-full space-y-8">
-        {renderDashboard()}
+        {authLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+            <div className="w-16 h-16 bg-brand-100 rounded-[28px] flex items-center justify-center mb-4">
+              <Zap size={32} className="text-brand-600" />
+            </div>
+            <p className="text-xs font-black text-slate-300 uppercase tracking-[0.3em]">Carregando...</p>
+          </div>
+        ) : !currentUser ? (
+          <div className="space-y-10">
+            {/* CTA for login if not logged in */}
+            <section className="bg-white/50 border-2 border-dashed border-brand-200 rounded-[40px] p-10 text-center space-y-6">
+                <div className="w-20 h-20 bg-brand-50 rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-brand-200/50">
+                  <Cloud size={40} className="text-brand-600" strokeWidth={2.5} />
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-black text-slate-900 font-display italic leading-tight">Sincronize seus dados</h3>
+                  <p className="text-sm font-medium text-slate-500 max-w-xs mx-auto">
+                    Faça login com sua conta Google para salvar seus registros na nuvem e acessá-los de qualquer dispositivo.
+                  </p>
+                </div>
+                <button 
+                  onClick={handleSignIn}
+                  className="w-full btn-primary flex items-center justify-center gap-3 py-5 rounded-3xl"
+                >
+                  <LogIn size={20} /> Entrar com Google
+                </button>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Seus dados atuais serão migrados automaticamente após o login.
+                </p>
+            </section>
+            {renderDashboard()}
+          </div>
+        ) : (
+          renderDashboard()
+        )}
       </main>
 
       {/* Floating Checkin Modal */}

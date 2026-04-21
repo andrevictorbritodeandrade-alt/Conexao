@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "PerformanceRecord": {
+      "title": "Registro de Performance",
+      "description": "Dados diários de performance e atividades.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "hadSex": { "type": "boolean" },
+        "libido": { "type": "number" },
+        "masturbated": { "type": "boolean" },
+        "usedTadala": { "type": "boolean" },
+        "periodStarts": { "type": "boolean" },
+        "periodEnds": { "type": "boolean" },
+        "medsStarts": { "type": "boolean" },
+        "medsEnds": { "type": "boolean" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "date", "libido", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/records/{recordId}": {
+      "schema": "PerformanceRecord",
+      "description": "Registros individuais de cada usuário."
+    }
+  }
+}
