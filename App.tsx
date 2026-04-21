@@ -117,13 +117,12 @@ interface LibidoLevel {
 }
 
 // --- Constants ---
-// Red/Passion Theme Colors
-const LIBIDO_LEVELS: { [key: number]: LibidoLevel } = {
-  1: { label: "Zero", value: 1, color: "#9ca3af", icon: <Frown size={32} /> }, // Gray
-  2: { label: "Baixa", value: 2, color: "#fca5a5", icon: <Meh size={32} /> }, // Light Red
-  3: { label: "Média", value: 3, color: "#ef4444", icon: <Smile size={32} /> }, // Red
-  4: { label: "Alta", value: 4, color: "#b91c1c", icon: <Flame size={32} /> }, // Dark Red
-  5: { label: "Pico", value: 5, color: "#7f1d1d", icon: <Flame size={32} fill="currentColor" /> } // Deep Blood Red
+const LIBIDO_META: { [key: number]: { label: string; value: number; color: string; icon: string } } = {
+  1: { label: "Zero", value: 1, color: "#9ca3af", icon: "Frown" },
+  2: { label: "Baixa", value: 2, color: "#fca5a5", icon: "Meh" },
+  3: { label: "Média", value: 3, color: "#ef4444", icon: "Smile" },
+  4: { label: "Alta", value: 4, color: "#b91c1c", icon: "Flame" },
+  5: { label: "Pico", value: 5, color: "#7f1d1d", icon: "Flame" }
 };
 
 // --- Components ---
@@ -135,11 +134,25 @@ const HeaderLogo = () => (
   </span>
 );
 
+// Libido Icon Helper to avoid top-level JSX instantiation
+const LibidoIcon = ({ level, size = 32 }: { level: number, size?: number }) => {
+  const meta = LIBIDO_META[level];
+  if (!meta) return null;
+  
+  if (meta.icon === 'Frown') return <Frown size={size} />;
+  if (meta.icon === 'Meh') return <Meh size={size} />;
+  if (meta.icon === 'Smile') return <Smile size={size} />;
+  if (meta.icon === 'Flame') return <Flame size={size} fill={level === 5 ? "currentColor" : "none"} />;
+  
+  return <span className="font-bold">{level}</span>;
+};
+
 const App: React.FC = () => {
   // Helpers
   const todayStr = new Date().toISOString().split('T')[0];
 
   // State
+  const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [records, setRecords] = useState<Record[]>([]);
@@ -170,10 +183,23 @@ const App: React.FC = () => {
 
   // Auth Listener
   useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
+    const handleError = (e: ErrorEvent) => {
+      setError(e.message);
+    };
+    window.addEventListener('error', handleError);
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setAuthLoading(false);
+    }, (err) => {
+      setError("Auth error: " + err.message);
+      setAuthLoading(false);
     });
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      unsubAuth();
+    };
   }, []);
 
   // Sync with Firestore
@@ -461,9 +487,12 @@ const App: React.FC = () => {
                         ? 'scale-110 shadow-xl shadow-brand-600/20 text-white' 
                         : 'text-slate-300 hover:bg-white hover:text-slate-400'}
                     `}
-                    style={{ backgroundColor: checkinLibido === level ? LIBIDO_LEVELS[level].color : 'transparent' }}
+                    style={{ backgroundColor: checkinLibido === level ? LIBIDO_META[level].color : 'transparent' }}
                   >
-                    {LIBIDO_LEVELS[level].icon}
+                    {LIBIDO_META[level].icon === 'Frown' && <Frown size={32} />}
+                    {LIBIDO_META[level].icon === 'Meh' && <Meh size={32} />}
+                    {LIBIDO_META[level].icon === 'Smile' && <Smile size={32} />}
+                    {LIBIDO_META[level].icon === 'Flame' && <Flame size={32} fill={checkinLibido === 5 ? "currentColor" : "none"} />}
                   </button>
                 ))}
               </div>
@@ -474,7 +503,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button 
                   onClick={() => setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false })} 
-                  className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-200 border-slate-300 text-slate-600 shadow-inner' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                  className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-400 border-slate-400 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
                 >
                   <Ban size={24} strokeWidth={3} />
                   <span className="font-black text-[10px] uppercase tracking-widest">Nada</span>
@@ -668,6 +697,11 @@ const App: React.FC = () => {
                  >
                     <span className="text-xs font-black font-display">{day}</span>
                     
+                    {rec?.hadSex && (
+                      <div className="absolute -bottom-1 -right-1 text-orange-400 drop-shadow-md">
+                        <Flame size={14} fill="currentColor" />
+                      </div>
+                    )}
                     {(rec?.periodEnds || rec?.periodEnded) && (
                       <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white shadow-sm"></div>
                     )}
@@ -720,7 +754,7 @@ const App: React.FC = () => {
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                             {new Date(data.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
                           </p>
-                          <p className="text-sm font-black italic font-display">Libido: {LIBIDO_LEVELS[data.libido].label}</p>
+                          <p className="text-sm font-black italic font-display">Libido: {LIBIDO_META[data.libido].label}</p>
                         </div>
                       );
                     }
@@ -761,11 +795,11 @@ const App: React.FC = () => {
                    <div 
                       className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg transition-transform group-hover:scale-110" 
                       style={{ 
-                        backgroundColor: LIBIDO_LEVELS[rec.libido].color,
-                        boxShadow: `0 8px 20px ${LIBIDO_LEVELS[rec.libido].color}40`
+                        backgroundColor: LIBIDO_META[rec.libido].color,
+                        boxShadow: `0 8px 20px ${LIBIDO_META[rec.libido].color}40`
                       }}
                    >
-                      {LIBIDO_LEVELS[rec.libido].icon}
+                      <LibidoIcon level={rec.libido} size={28} />
                    </div>
                    
                    {/* Content */}
@@ -775,7 +809,7 @@ const App: React.FC = () => {
                            {new Date(rec.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}.
                          </h4>
                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                           {LIBIDO_LEVELS[rec.libido].label}
+                           {LIBIDO_META[rec.libido].label}
                          </span>
                       </div>
                       
@@ -841,6 +875,29 @@ const App: React.FC = () => {
   };
 
   // Main Render
+  if (error) {
+    return (
+      <div className="min-h-screen bg-rose-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-rose-100 rounded-[32px] flex items-center justify-center mb-6">
+          <AlertCircle size={40} className="text-rose-600" />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 font-display italic mb-2">Ops! Algo deu errado</h1>
+        <p className="text-sm font-medium text-slate-600 max-w-xs mb-8">
+          Ocorreu um erro ao carregar o aplicativo. Tente recarregar a página.
+        </p>
+        <div className="bg-white border border-rose-100 p-4 rounded-2xl mb-8 w-full max-w-sm text-left overflow-auto max-h-40">
+          <code className="text-[10px] text-rose-500 break-all">{error}</code>
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="btn-primary px-8 py-4 rounded-3xl"
+        >
+          Recarregar App
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-brand-50 font-sans text-slate-900 selection:bg-brand-200 flex flex-col">
       {/* HEADER */}
@@ -855,45 +912,16 @@ const App: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           {currentUser ? (
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block text-right">
-                <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">André Brito</p>
-                <p className="text-[8px] font-bold text-brand-500 uppercase tracking-tighter mt-1">Conectado</p>
-              </div>
-              <button 
-                onClick={handleSignOut}
-                className="w-10 h-10 rounded-2xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-brand-50 hover:text-brand-600 transition-all shadow-sm active:scale-90"
-                title="Sair"
-              >
-                <LogOut size={18} strokeWidth={2.5} />
-              </button>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-50 border border-brand-100">
+               <Cloud size={14} className="text-brand-600" />
+               <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">Sincronizado</span>
             </div>
           ) : (
-            <button 
-              onClick={handleSignIn}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-600 text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all active:scale-95"
-            >
-              <LogIn size={14} /> Entrar
-            </button>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200">
+               <Smartphone size={14} className="text-slate-400" />
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local</span>
+            </div>
           )}
-          <button 
-            onClick={() => {
-              if (window.confirm("Deseja realmente limpar todos os dados e carregar o histórico padrão?")) {
-                if (currentUser) {
-                  // If logged in, clear Firestore (expensive but user requested)
-                  records.forEach(async (r) => {
-                    await deleteDoc(doc(db, 'users', currentUser.uid, 'records', r.id));
-                  });
-                }
-                localStorage.removeItem('conexao_v7_data');
-                window.location.reload();
-              }
-            }}
-            className="w-10 h-10 rounded-2xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-brand-50 hover:text-brand-600 transition-all shadow-sm active:scale-90"
-            title="Limpar Dados"
-          >
-            <Ban size={18} strokeWidth={2.5} />
-          </button>
         </div>
       </header>
 
@@ -904,31 +932,6 @@ const App: React.FC = () => {
               <Zap size={32} className="text-brand-600" />
             </div>
             <p className="text-xs font-black text-slate-300 uppercase tracking-[0.3em]">Carregando...</p>
-          </div>
-        ) : !currentUser ? (
-          <div className="space-y-10">
-            {/* CTA for login if not logged in */}
-            <section className="bg-white/50 border-2 border-dashed border-brand-200 rounded-[40px] p-10 text-center space-y-6">
-                <div className="w-20 h-20 bg-brand-50 rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-brand-200/50">
-                  <Cloud size={40} className="text-brand-600" strokeWidth={2.5} />
-                </div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-slate-900 font-display italic leading-tight">Sincronize seus dados</h3>
-                  <p className="text-sm font-medium text-slate-500 max-w-xs mx-auto">
-                    Faça login com sua conta Google para salvar seus registros na nuvem e acessá-los de qualquer dispositivo.
-                  </p>
-                </div>
-                <button 
-                  onClick={handleSignIn}
-                  className="w-full btn-primary flex items-center justify-center gap-3 py-5 rounded-3xl"
-                >
-                  <LogIn size={20} /> Entrar com Google
-                </button>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Seus dados atuais serão migrados automaticamente após o login.
-                </p>
-            </section>
-            {renderDashboard()}
           </div>
         ) : (
           renderDashboard()
