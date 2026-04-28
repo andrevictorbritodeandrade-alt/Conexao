@@ -282,9 +282,9 @@ const App: React.FC = () => {
         
         const initialData: Record[] = [
           // User requested records
-          { id: 'req1', date: '2026-04-23', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, periodEnds: true, timestamp: Date.parse('2026-04-23') },
-          { id: 'req2', date: '2026-04-26', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, timestamp: Date.parse('2026-04-26') },
-          { id: 'req3', date: '2026-04-27', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, timestamp: Date.parse('2026-04-27') },
+          { id: 'req1', date: '2026-04-23', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, periodEnds: true, periodEnded: true, timestamp: Date.parse('2026-04-23') },
+          { id: 'req2', date: '2026-04-26', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, periodEnded: false, timestamp: Date.parse('2026-04-26') },
+          { id: 'req3', date: '2026-04-27', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, periodEnded: false, timestamp: Date.parse('2026-04-27') },
           
           { id: 'm1', date: `${currentYear}-03-24`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-24`) },
           { id: 'm2', date: `${currentYear}-03-25`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-25`) },
@@ -660,556 +660,11 @@ const App: React.FC = () => {
 
   const partnerInfo = getPartnerCycleInfo();
 
-  // --- Render Functions ---
-
-  const renderCheckinModal = () => {
-    // Format the date being edited for the title
-    const dateObj = new Date(editingDate + 'T12:00:00');
-    const isToday = editingDate === todayStr;
-    const dateTitle = isToday 
-      ? "Check-in de Hoje" 
-      : `Check-in: ${dateObj.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`;
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-        <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in slide-in-from-bottom-10 duration-500 max-h-[90vh] overflow-y-auto border border-white/20">
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <h2 className="text-3xl font-black text-slate-900 font-display italic tracking-tight">{dateTitle}</h2>
-              {!isToday && <p className="text-[10px] text-brand-500 font-black uppercase tracking-[0.2em] mt-1">Registro Retroativo</p>}
-            </div>
-            <button onClick={() => setIsCheckinOpen(false)} className="w-10 h-10 bg-slate-50 rounded-2xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all active:scale-90 flex items-center justify-center">
-              <XIcon size={20} strokeWidth={3} />
-            </button>
-          </div>
-          <div className="space-y-8">
-            {/* Libido Selection */}
-            <div className="space-y-4">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Nível de desejo (Você)</p>
-              <div className="flex justify-between gap-2 bg-slate-50 p-2 rounded-[28px] border border-slate-100">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <button 
-                    key={level} 
-                    onClick={() => setCheckinLibido(level)} 
-                    className={`
-                      flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-300
-                      ${checkinLibido === level 
-                        ? 'scale-110 shadow-xl shadow-brand-600/20 text-white' 
-                        : 'text-slate-300 hover:bg-white hover:text-slate-200'}
-                    `}
-                    style={{ backgroundColor: checkinLibido === level ? LIBIDO_META[level].color : 'transparent' }}
-                  >
-                    <LibidoIcon level={level} size={28} />
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Activities */}
-            <div className="space-y-4">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Suas Atividades</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <button 
-                  onClick={() => setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false, didClimax: true })} 
-                  className={`p-5 rounded-[32px] border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-800 border-slate-800 text-white shadow-xl scale-105' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
-                >
-                  <Ban size={28} strokeWidth={3} />
-                  <span className="font-black text-[10px] uppercase tracking-widest">Não Rolou</span>
-                </button>
-                <button onClick={() => toggleActivity('hadSex')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.hadSex ? 'bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-white border-slate-100 text-slate-400 hover:border-brand-100'}`}>
-                  <Heart size={24} fill={checkinActivities.hadSex ? "currentColor" : "none"} strokeWidth={3} />
-                  <span className="font-black text-[10px] uppercase tracking-widest">Transa</span>
-                </button>
-                <button onClick={() => toggleActivity('masturbated')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.masturbated ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-white border-slate-100 text-slate-400 hover:border-orange-100'}`}>
-                  <UserIcon size={24} strokeWidth={3} />
-                  <span className="font-black text-[10px] uppercase tracking-widest">Solo</span>
-                </button>
-                <button onClick={() => toggleActivity('usedTadala')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.usedTadala ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                  <Pill size={24} strokeWidth={3} />
-                  <span className="font-black text-[10px] uppercase tracking-widest">Tadala</span>
-                </button>
-              </div>
-              
-              {/* Climax Toggle - Show only if Sex occurred */}
-              {checkinActivities.hadSex && (
-                <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100 animate-in zoom-in-95 duration-200">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 size={24} className="text-emerald-600" />
-                    <div>
-                      <span className="block font-black text-xs text-emerald-900 uppercase tracking-widest">Gozou?</span>
-                      <span className="text-[10px] text-emerald-600 font-bold">{checkinActivities.didClimax ? "Sim, finalizado" : "Não, sem clímax"}</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => toggleActivity('didClimax')}
-                    className={`w-14 h-8 rounded-full relative transition-all duration-300 ${checkinActivities.didClimax ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                  >
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 ${checkinActivities.didClimax ? 'left-7' : 'left-1 shadow-sm'}`}></div>
-                  </button>
-                </div>
-              )}
-            </div>
-            {/* Partner Cycle */}
-            <div className="bg-brand-50/50 p-6 rounded-[32px] border border-brand-100 space-y-4">
-               <p className="text-xs font-black text-brand-600 uppercase tracking-widest text-center flex items-center justify-center gap-2">
-                 <CalendarHeart size={16} /> Ciclo da Marcelly
-               </p>
-               <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => togglePartner('periodStarts')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.periodStarts ? 'bg-brand-600 border-brand-600 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-brand-200'}`}>
-                    <Droplets size={20} strokeWidth={3} />
-                    <span className="font-black text-[10px] uppercase tracking-widest">Desceu</span>
-                  </button>
-                  <button onClick={() => togglePartner('periodEnds')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.periodEnds ? 'bg-yellow-500 border-yellow-500 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-yellow-200'}`}>
-                    <Sparkles size={20} strokeWidth={3} />
-                    <span className="font-black text-[10px] uppercase tracking-widest">Acabou</span>
-                  </button>
-                  <button onClick={() => togglePartner('medsStarts')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.medsStarts ? 'bg-blue-500 border-blue-500 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-blue-200'}`}>
-                    <PlayCircle size={20} strokeWidth={3} />
-                    <span className="font-black text-[10px] uppercase tracking-widest">Retomou</span>
-                  </button>
-                  <button onClick={() => togglePartner('medsEnds')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.medsEnds ? 'bg-orange-400 border-orange-400 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-orange-200'}`}>
-                    <StopCircle size={20} strokeWidth={3} />
-                    <span className="font-black text-[10px] uppercase tracking-widest">Pausa</span>
-                  </button>
-               </div>
-            </div>
-            <button onClick={handleSaveCheckin} className="btn-primary w-full text-lg font-black uppercase tracking-widest py-5 rounded-[28px]">
-              {isToday ? "Salvar Hoje" : "Salvar Histórico"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderDashboard = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
-
-    const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-    const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-
-    // Progress calculation based on current year
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-    const totalDaysInYear = isLeapYear(year) ? 366 : 365;
-    
-    let daysPassed = 0;
-    if (year < currentYear) {
-      daysPassed = totalDaysInYear;
-    } else if (year === currentYear) {
-      const startOfYear = new Date(year, 0, 1);
-      const diff = now.getTime() - startOfYear.getTime();
-      daysPassed = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
-    }
-
-    const uniqueDaysWithSex = new Set(
-      records.filter(r => r.hadSex && new Date(r.date + 'T12:00:00').getFullYear() === year).map(r => r.date)
-    ).size;
-    const sexPercentage = daysPassed > 0 ? ((uniqueDaysWithSex / daysPassed) * 100).toFixed(1) : '0.0';
-
-    const avgLibido = records.length > 0 ? records.reduce((acc, r) => acc + r.libido, 0) / records.length : 0;
-    
-    // Performance Note: missed days count as "no sex" automatically because we use calendar days (daysPassed)
-    // for the sexPercentage calculation above.
-
-    // History data: Sort desc
-    const sortedHistory = [...records]
-      .sort((a,b) => b.timestamp - a.timestamp)
-      .slice(0, 10); // Last 10 events
-
-    return (
-      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        
-        {/* HERO SUMMARY */}
-        <section className="relative overflow-hidden bg-brand-600 rounded-[40px] p-8 text-white shadow-2xl shadow-brand-900/20">
-           {/* Decorative elements */}
-           <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-400 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-           <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-brand-900 rounded-full blur-3xl opacity-30"></div>
-           
-           <div className="relative z-10">
-              <div className="flex items-center justify-between mb-8">
-                 <div className="flex items-center gap-2">
-                   <div className="p-2 bg-white/10 backdrop-blur-md rounded-xl">
-                      <Zap size={18} className="text-brand-100" />
-                   </div>
-                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">Performance Anual</span>
-                 </div>
-                 <div className="text-right bg-black/20 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5">
-                   <span className="text-[10px] font-black uppercase tracking-widest text-brand-100 italic">
-                     Dia {daysPassed} de {totalDaysInYear}
-                   </span>
-                 </div>
-              </div>
-              
-              <div className="flex items-baseline gap-2 mb-1">
-                 <h2 className="text-7xl font-black font-display tracking-tighter italic">{uniqueDaysWithSex}</h2>
-                 <span className="text-xl font-bold text-brand-100 italic">dias transando</span>
-              </div>
-              
-              <div className="mb-8">
-                 <p className="text-sm font-medium text-brand-100/80 mb-3">
-                   Relação de aproveitamento: {sexPercentage}% dos dias em {year}.
-                 </p>
-                 <div className="w-full bg-brand-900/40 rounded-full h-3 p-0.5 border border-white/10">
-                    <div className="bg-gradient-to-r from-brand-300 to-white h-full rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-1000" style={{ width: `${Math.min(Number(sexPercentage), 100)}%` }}></div>
-                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
-                 <div className="space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-200/60">Libido Média</span>
-                    <div className="flex items-center gap-2">
-                       <Flame size={14} className="text-brand-300" />
-                       <span className="text-lg font-black font-display tracking-tight italic">{avgLibido.toFixed(1)}</span>
-                    </div>
-                 </div>
-                 <div className="space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-200/60">Prev. Menstruação</span>
-                    <div className="flex items-center gap-2">
-                       <CalendarHeart size={14} className="text-brand-300" />
-                       <span className="text-lg font-black font-display tracking-tight italic">
-                         {partnerInfo?.nextPeriodDate ? partnerInfo.nextPeriodDate.toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : '--'}
-                       </span>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </section>
-
-        {/* AI ASSISTANT "CAIXINHA" */}
-        <section className="neo-card p-0 overflow-hidden border-2 border-brand-100 shadow-xl shadow-brand-100/50">
-          <div className="bg-brand-50 p-6 border-b border-brand-100/50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-600/30">
-                <Sparkles size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">Assistente Inteligente</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1 italic opacity-70">Log automático via chat</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="max-h-[300px] overflow-y-auto p-6 space-y-4 bg-slate-50/30 scrollbar-hide">
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
-                <div className={`
-                  max-w-[85%] px-5 py-3 rounded-2xl text-sm font-medium shadow-sm transition-all
-                  ${msg.role === 'user' 
-                    ? 'bg-brand-600 text-white rounded-tr-none' 
-                    : msg.role === 'system'
-                      ? 'bg-rose-50 text-rose-600 border border-rose-100 italic text-xs'
-                      : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'}
-                `}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-            {isAiProcessing && (
-              <div className="flex justify-start">
-                <div className="bg-white/80 backdrop-blur-sm px-5 py-3 rounded-2xl rounded-tl-none border border-slate-100 flex items-center gap-3">
-                   <div className="flex gap-1">
-                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce"></span>
-                   </div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Anotando...</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 bg-white border-t border-brand-100/50">
-            <div className="relative">
-              <input 
-                type="text" 
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                placeholder="Como foi seu dia hoje?"
-                className="w-full bg-slate-50 border-2 border-transparent rounded-[24px] pl-5 pr-14 py-4 text-sm font-medium placeholder:text-slate-300 focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/5 transition-all outline-none"
-              />
-              <button 
-                onClick={handleSendChat}
-                disabled={!chatInput.trim() || isAiProcessing}
-                className="absolute right-2 top-2 w-11 h-11 bg-brand-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-600/30 active:scale-90 transition-all hover:bg-brand-700 disabled:bg-slate-200"
-              >
-                <Send size={18} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* CALENDAR CARD */}
-        <section className="neo-card p-6">
-           <div className="flex items-center justify-between mb-8">
-              <button onClick={prevMonth} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all active:scale-90">
-                <ChevronLeft size={20} strokeWidth={3} />
-              </button>
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] font-display">
-                {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-              </h3>
-              <button onClick={nextMonth} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all active:scale-90">
-                <ChevronRight size={20} strokeWidth={3} />
-              </button>
-           </div>
-           
-           <div className="grid grid-cols-7 mb-6 text-center">
-             {['D','S','T','Q','Q','S','S'].map((d, index) => (
-               <div key={`weekday-${index}`} className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{d}</div>
-             ))}
-           </div>
-
-           <div className="grid grid-cols-7 gap-y-4 gap-x-2">
-             {Array.from({length: firstDay}).map((_, i) => <div key={`empty-${i}`} />)}
-             {Array.from({length: daysInMonth}).map((_, i) => {
-               const day = i + 1;
-               const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-               const rec = records.find(r => r.date === dStr);
-               const isToday = dStr === todayStr;
-               const hasRecord = !!rec;
-               
-               return (
-                 <div 
-                    key={day} 
-                    onClick={() => handleOpenCheckin(dStr)}
-                    className={`
-                      aspect-square flex flex-col items-center justify-center rounded-2xl relative transition-all cursor-pointer hover:scale-110 active:scale-90
-                      ${hasRecord 
-                        ? rec?.hadSex 
-                          ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30' 
-                          : rec?.masturbated 
-                            ? 'bg-orange-500 text-white shadow-md' 
-                            : 'bg-white border-2 border-slate-200 text-slate-400' 
-                        : isToday 
-                          ? 'bg-slate-900 text-white shadow-xl ring-4 ring-slate-100' 
-                          : 'bg-slate-50 text-slate-400 hover:bg-brand-50 hover:text-brand-600'}
-                    `}
-                 >
-                    <span className="text-xs font-black font-display">{day}</span>
-                    
-                    {rec?.hadSex && (
-                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-brand-600 shadow-sm border border-brand-100 animate-pulse">
-                        <Flame size={12} fill="currentColor" />
-                      </div>
-                    )}
-                    {!rec?.hadSex && rec?.masturbated && (
-                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-orange-500 shadow-sm border border-orange-100">
-                        <UserIcon size={12} />
-                      </div>
-                    )}
-                    {!rec?.hadSex && !rec?.masturbated && hasRecord && (
-                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-slate-400 shadow-sm border border-slate-100 font-black flex items-center justify-center">
-                        <Ban size={10} />
-                      </div>
-                    )}
-                    {(rec?.periodEnds || rec?.periodEnded) && (
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white shadow-sm"></div>
-                    )}
-                 </div>
-               );
-             })}
-           </div>
-        </section>
-
-        {/* OSCILAÇÃO CARD */}
-        <section className="neo-card p-6 overflow-hidden">
-           <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-brand-50 rounded-xl">
-                    <Activity size={18} className="text-brand-600" />
-                 </div>
-                 <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 font-display">Oscilação</h3>
-              </div>
-           </div>
-           
-           <div className="h-56 w-full -ml-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={[...records].sort((a,b) => a.timestamp - b.timestamp).slice(-15)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorLibido" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#e53e3e" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#e53e3e" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(val) => new Date(val).getDate().toString()} 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                  dy={10}
-                />
-                <YAxis 
-                  domain={[0, 6]} 
-                  hide={true}
-                />
-                <Tooltip 
-                  cursor={{stroke: '#fca5a5', strokeWidth: 2, strokeDasharray: '5 5'}}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload as Record;
-                      return (
-                        <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-2xl border border-slate-800 animate-in zoom-in-95 duration-200">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                            {new Date(data.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}
-                          </p>
-                          <p className="text-sm font-black italic font-display">Libido: {LIBIDO_META[data.libido].label}</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="libido" 
-                  stroke="#e53e3e" 
-                  strokeWidth={5} 
-                  fillOpacity={1} 
-                  fill="url(#colorLibido)" 
-                  animationDuration={2000}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-           </div>
-        </section>
-
-        {/* HISTÓRICO LIST */}
-        <section className="space-y-6">
-          <div className="flex justify-between items-end px-2">
-            <div className="space-y-1">
-               <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] font-display">Histórico</h3>
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registros Recentes</p>
-            </div>
-            <div className="flex items-baseline gap-1">
-               <span className="text-2xl font-black text-brand-600 font-display italic">{uniqueDaysWithSex}</span>
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">transas</span>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-             {sortedHistory.map((rec) => (
-                <div key={rec.id} className="neo-card p-5 flex items-center gap-5 group hover:border-brand-200 transition-all">
-                   {/* Icon Box */}
-                   <div 
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg transition-transform group-hover:scale-110" 
-                      style={{ 
-                        backgroundColor: LIBIDO_META[rec.libido].color,
-                        boxShadow: `0 8px 20px ${LIBIDO_META[rec.libido].color}40`
-                      }}
-                   >
-                      <LibidoIcon level={rec.libido} size={28} />
-                   </div>
-                   
-                   {/* Content */}
-                   <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                         <h4 className="text-lg font-black text-slate-900 font-display italic">
-                           {new Date(rec.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}.
-                         </h4>
-                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                           {LIBIDO_META[rec.libido].label}
-                         </span>
-                      </div>
-                      
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-2 mt-2">
-                         {!rec.hadSex && !rec.masturbated && !rec.usedTadala && (
-                           <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-slate-200">
-                              <Ban size={10} /> NADA
-                           </span>
-                         )}
-                         {rec.hadSex && rec.didClimax === false && (
-                           <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-rose-100 italic">
-                              <AlertCircle size={10} /> SEM CLÍMAX
-                           </span>
-                         )}
-                         {rec.hadSex && rec.didClimax === true && (
-                           <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-emerald-100">
-                              <Check size={10} strokeWidth={3} /> FINALIZOU
-                           </span>
-                         )}
-                         {rec.hadSex && (
-                           <span className="px-3 py-1 bg-brand-50 text-brand-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-brand-100">
-                              <Heart size={10} fill="currentColor" /> TRANSA
-                           </span>
-                         )}
-                         {rec.masturbated && (
-                           <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-orange-100">
-                              <UserIcon size={10} /> SOLO
-                           </span>
-                         )}
-                         {rec.usedTadala && (
-                           <span className="px-3 py-1 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-slate-200">
-                              <Pill size={10} /> TADALA
-                           </span>
-                         )}
-                         {(rec.periodEnds || rec.periodEnded) && (
-                           <span className="px-3 py-1 bg-yellow-50 text-yellow-700 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-yellow-200">
-                              <Sparkles size={10} /> ACABOU
-                           </span>
-                         )}
-                      </div>
-                   </div>
-                </div>
-             ))}
-             {sortedHistory.length === 0 && (
-                <div className="neo-card py-12 text-center text-slate-400 font-bold text-sm opacity-50 italic">
-                   Nenhum registro relevante ainda.
-                </div>
-             )}
-          </div>
-        </section>
-
-        {/* FOOTER */}
-        <footer className="py-12 text-center space-y-6">
-          <div className="flex flex-col items-center">
-            <div className="w-12 h-px bg-brand-200 mb-6"></div>
-            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-2">
-              CONEXÃO <span className="text-brand-200 mx-2">•</span> GESTÃO DE PERFORMANCE
-            </h4>
-            <p className="text-[10px] font-bold text-slate-400">
-              Desenvolvido por André Brito
-            </p>
-          </div>
-          
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
-             <Smartphone size={14} className="text-brand-300" strokeWidth={2.5} />
-             <span className="text-xs font-black tracking-widest text-slate-400">21 994 527 694</span>
-          </div>
-        </footer>
-
-      </div>
-    );
-  };
+  // Main Render
 
   // Main Render
   if (error) {
-    return (
-      <div className="min-h-screen bg-rose-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-rose-100 rounded-[32px] flex items-center justify-center mb-6">
-          <AlertCircle size={40} className="text-rose-600" />
-        </div>
-        <h1 className="text-2xl font-black text-slate-900 font-display italic mb-2">Ops! Algo deu errado</h1>
-        <p className="text-sm font-medium text-slate-600 max-w-xs mb-8">
-          Ocorreu um erro ao carregar o aplicativo. Tente recarregar a página.
-        </p>
-        <div className="bg-white border border-rose-100 p-4 rounded-2xl mb-8 w-full max-w-sm text-left overflow-auto max-h-40">
-          <code className="text-[10px] text-rose-500 break-all">{error}</code>
-        </div>
-        <button 
-          onClick={() => window.location.reload()}
-          className="btn-primary px-8 py-4 rounded-3xl"
-        >
-          Recarregar App
-        </button>
-      </div>
-    );
+    return <ErrorFallback error={error} />;
   }
 
   return (
@@ -1248,7 +703,19 @@ const App: React.FC = () => {
             <p className="text-xs font-black text-slate-300 uppercase tracking-[0.3em]">Carregando...</p>
           </div>
         ) : (
-          renderDashboard()
+          <Dashboard 
+            records={records}
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            todayStr={todayStr}
+            chatMessages={chatMessages}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            handleSendChat={handleSendChat}
+            isAiProcessing={isAiProcessing}
+            handleOpenCheckin={handleOpenCheckin}
+            partnerInfo={partnerInfo}
+          />
         )}
       </main>
 
@@ -1258,7 +725,18 @@ const App: React.FC = () => {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsCheckinOpen(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
             <div className="pointer-events-auto w-full">
-              {renderCheckinModal()}
+              <CheckinModal 
+                editingDate={editingDate}
+                todayStr={todayStr}
+                checkinLibido={checkinLibido}
+                setCheckinLibido={setCheckinLibido}
+                checkinActivities={checkinActivities}
+                toggleActivity={toggleActivity}
+                checkinPartner={checkinPartner}
+                togglePartner={togglePartner}
+                handleSaveCheckin={handleSaveCheckin}
+                onClose={() => setIsCheckinOpen(false)}
+              />
             </div>
           </div>
         </>
@@ -1272,6 +750,383 @@ const App: React.FC = () => {
         </div>
       )}
 
+    </div>
+  );
+};
+
+// --- Sub-components (Moved out of App to avoid hook issues and clean up) ---
+
+const ErrorFallback = ({ error }: { error: string }) => (
+  <div className="min-h-screen bg-rose-50 flex flex-col items-center justify-center p-6 text-center">
+    <div className="w-20 h-20 bg-rose-100 rounded-[32px] flex items-center justify-center mb-6">
+      <AlertCircle size={40} className="text-rose-600" />
+    </div>
+    <h1 className="text-2xl font-black text-slate-900 font-display italic mb-2">Ops! Algo deu errado</h1>
+    <p className="text-sm font-medium text-slate-600 max-w-xs mb-8">
+      Ocorreu um erro ao carregar o aplicativo. Tente recarregar a página.
+    </p>
+    <div className="bg-white border border-rose-100 p-4 rounded-2xl mb-8 w-full max-w-sm text-left overflow-auto max-h-40">
+      <code className="text-[10px] text-rose-500 break-all">{error}</code>
+    </div>
+    <button 
+      onClick={() => window.location.reload()}
+      className="btn-primary px-8 py-4 rounded-3xl"
+    >
+      Recarregar App
+    </button>
+  </div>
+);
+
+const Dashboard = ({ 
+  records, currentDate, setCurrentDate, todayStr, 
+  chatMessages, chatInput, setChatInput, handleSendChat, 
+  isAiProcessing, handleOpenCheckin, partnerInfo 
+}: any) => {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  const totalDaysInYear = isLeapYear(year) ? 366 : 365;
+  
+  let daysPassed = 0;
+  if (year < currentYear) {
+    daysPassed = totalDaysInYear;
+  } else if (year === currentYear) {
+    const startOfYear = new Date(year, 0, 1);
+    const diff = now.getTime() - startOfYear.getTime();
+    daysPassed = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  }
+
+  const uniqueDaysWithSex = new Set(
+    records.filter((r: any) => r.hadSex && new Date(r.date + 'T12:00:00').getFullYear() === year).map((r: any) => r.date)
+  ).size;
+  const sexPercentage = daysPassed > 0 ? ((uniqueDaysWithSex / daysPassed) * 100).toFixed(1) : '0.0';
+  const avgLibido = records.length > 0 ? records.reduce((acc: any, r: any) => acc + r.libido, 0) / records.length : 0;
+  const sortedHistory = [...records].sort((a,b) => b.timestamp - a.timestamp).slice(0, 10);
+
+  return (
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <section className="relative overflow-hidden bg-brand-600 rounded-[40px] p-8 text-white shadow-2xl shadow-brand-900/20">
+         <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-400 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+         <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-brand-900 rounded-full blur-3xl opacity-30"></div>
+         <div className="relative z-10">
+            <div className="flex items-center justify-between mb-8">
+               <div className="flex items-center gap-2">
+                 <div className="p-2 bg-white/10 backdrop-blur-md rounded-xl">
+                    <Zap size={18} className="text-brand-100" />
+                 </div>
+                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">Performance Anual</span>
+               </div>
+               <div className="text-right bg-black/20 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5">
+                 <span className="text-[10px] font-black uppercase tracking-widest text-brand-100 italic">
+                   Dia {daysPassed} de {totalDaysInYear}
+                 </span>
+               </div>
+            </div>
+            <div className="flex items-baseline gap-2 mb-1">
+               <h2 className="text-7xl font-black font-display tracking-tighter italic">{uniqueDaysWithSex}</h2>
+               <span className="text-xl font-bold text-brand-100 italic">dias transando</span>
+            </div>
+            <div className="mb-8">
+               <p className="text-sm font-medium text-brand-100/80 mb-3">
+                 Relação de aproveitamento: {sexPercentage}% dos dias em {year}.
+               </p>
+               <div className="w-full bg-brand-900/40 rounded-full h-3 p-0.5 border border-white/10">
+                  <div className="bg-gradient-to-r from-brand-300 to-white h-full rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-1000" style={{ width: `${Math.min(Number(sexPercentage), 100)}%` }}></div>
+               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
+               <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-200/60">Libido Média</span>
+                  <div className="flex items-center gap-2">
+                     <Flame size={14} className="text-brand-300" />
+                     <span className="text-lg font-black font-display tracking-tight italic">{avgLibido.toFixed(1)}</span>
+                  </div>
+               </div>
+               <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-200/60">Prev. Menstruação</span>
+                  <div className="flex items-center gap-2">
+                     <CalendarHeart size={14} className="text-brand-300" />
+                     <span className="text-lg font-black font-display tracking-tight italic">
+                       {partnerInfo?.nextPeriodDate ? partnerInfo.nextPeriodDate.toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'}) : '--'}
+                     </span>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </section>
+
+      <section className="neo-card p-0 overflow-hidden border-2 border-brand-100 shadow-xl shadow-brand-100/50">
+        <div className="bg-brand-50 p-6 border-b border-brand-100/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-600/30">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">Assistente Inteligente</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1 italic opacity-70">Log automático via chat</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-6 space-y-4 bg-slate-50/30 scrollbar-hide">
+          {chatMessages.map((msg: any, i: number) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
+              <div className={`
+                max-w-[85%] px-5 py-3 rounded-2xl text-sm font-medium shadow-sm transition-all
+                ${msg.role === 'user' ? 'bg-brand-600 text-white rounded-tr-none' : msg.role === 'system' ? 'bg-rose-50 text-rose-600 border border-rose-100 italic text-xs' : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'}
+              `}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {isAiProcessing && (
+            <div className="flex justify-start">
+              <div className="bg-white/80 backdrop-blur-sm px-5 py-3 rounded-2xl rounded-tl-none border border-slate-100 flex items-center gap-3">
+                 <div className="flex gap-1">
+                   <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                   <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                   <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce"></span>
+                 </div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Anotando...</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="p-4 bg-white border-t border-brand-100/50">
+          <div className="relative">
+            <input 
+              type="text" 
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+              placeholder="Como foi seu dia hoje?"
+              className="w-full bg-slate-50 border-2 border-transparent rounded-[24px] pl-5 pr-14 py-4 text-sm font-medium placeholder:text-slate-300 focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/5 transition-all outline-none"
+            />
+            <button onClick={handleSendChat} disabled={!chatInput.trim() || isAiProcessing} className="absolute right-2 top-2 w-11 h-11 bg-brand-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-600/30 active:scale-90 transition-all hover:bg-brand-700 disabled:bg-slate-200">
+              <Send size={18} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="neo-card p-6">
+         <div className="flex items-center justify-between mb-8">
+            <button onClick={prevMonth} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all active:scale-90">
+              <ChevronLeft size={20} strokeWidth={3} />
+            </button>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] font-display">
+              {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+            </h3>
+            <button onClick={nextMonth} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all active:scale-90">
+              <ChevronRight size={20} strokeWidth={3} />
+            </button>
+         </div>
+         <div className="grid grid-cols-7 mb-6 text-center">
+           {['D','S','T','Q','Q','S','S'].map((d, index) => (
+             <div key={`weekday-${index}`} className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{d}</div>
+           ))}
+         </div>
+         <div className="grid grid-cols-7 gap-y-4 gap-x-2">
+           {Array.from({length: firstDay}).map((_, i) => <div key={`empty-${i}`} />)}
+           {Array.from({length: daysInMonth}).map((_, i) => {
+             const day = i + 1;
+             const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+             const rec = records.find((r: any) => r.date === dStr);
+             const isToday = dStr === todayStr;
+             const hasRecord = !!rec;
+             return (
+               <div key={day} onClick={() => handleOpenCheckin(dStr)} className={`aspect-square flex flex-col items-center justify-center rounded-2xl relative transition-all cursor-pointer hover:scale-110 active:scale-90 ${hasRecord ? rec?.hadSex ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30' : rec?.masturbated ? 'bg-orange-500 text-white shadow-md' : 'bg-white border-2 border-slate-200 text-slate-400' : isToday ? 'bg-slate-900 text-white shadow-xl ring-4 ring-slate-100' : 'bg-slate-50 text-slate-400 hover:bg-brand-50 hover:text-brand-600'}`}>
+                  <span className="text-xs font-black font-display">{day}</span>
+                  {rec?.hadSex && <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-brand-600 shadow-sm border border-brand-100 animate-pulse"><Flame size={12} fill="currentColor" /></div>}
+                  {!rec?.hadSex && rec?.masturbated && <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-orange-500 shadow-sm border border-orange-100"><UserIcon size={12} /></div>}
+                  {!rec?.hadSex && !rec?.masturbated && hasRecord && <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-slate-400 shadow-sm border border-slate-100 font-black flex items-center justify-center"><Ban size={10} /></div>}
+                  {(rec?.periodEnds || rec?.periodEnded) && <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white shadow-sm"></div>}
+               </div>
+             );
+           })}
+         </div>
+      </section>
+
+      <section className="neo-card p-6 overflow-hidden">
+         <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+               <div className="p-2 bg-brand-50 rounded-xl"><Activity size={18} className="text-brand-600" /></div>
+               <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 font-display">Oscilação</h3>
+            </div>
+         </div>
+         <div className="h-56 w-full -ml-6">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={[...records].sort((a,b) => a.timestamp - b.timestamp).slice(-15)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorLibido" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#e53e3e" stopOpacity={0.3}/><stop offset="95%" stopColor="#e53e3e" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" tickFormatter={(val) => new Date(val).getDate().toString()} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+              <YAxis domain={[0, 6]} hide={true} />
+              <Tooltip cursor={{stroke: '#fca5a5', strokeWidth: 2, strokeDasharray: '5 5'}} content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload as Record;
+                    return (
+                      <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-2xl border border-slate-800 animate-in zoom-in-95 duration-200">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{new Date(data.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}</p>
+                        <p className="text-sm font-black italic font-display">Libido: {LIBIDO_META[data.libido].label}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }} />
+              <Area type="monotone" dataKey="libido" stroke="#e53e3e" strokeWidth={5} fillOpacity={1} fill="url(#colorLibido)" animationDuration={2000} />
+            </AreaChart>
+          </ResponsiveContainer>
+         </div>
+      </section>
+
+      <section className="space-y-6">
+        <div className="flex justify-between items-end px-2">
+          <div className="space-y-1">
+             <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] font-display">Histórico</h3>
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registros Recentes</p>
+          </div>
+          <div className="flex items-baseline gap-1">
+             <span className="text-2xl font-black text-brand-600 font-display italic">{uniqueDaysWithSex}</span>
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">transas</span>
+          </div>
+        </div>
+        <div className="space-y-4">
+           {sortedHistory.map((rec: any) => (
+              <div key={rec.id} className="neo-card p-5 flex items-center gap-5 group hover:border-brand-200 transition-all">
+                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg transition-transform group-hover:scale-110" style={{ backgroundColor: LIBIDO_META[rec.libido].color, boxShadow: `0 8px 20px ${LIBIDO_META[rec.libido].color}40` }}>
+                    <LibidoIcon level={rec.libido} size={28} />
+                 </div>
+                 <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                       <h4 className="text-lg font-black text-slate-900 font-display italic">{new Date(rec.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}.</h4>
+                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{LIBIDO_META[rec.libido].label}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                       {!rec.hadSex && !rec.masturbated && !rec.usedTadala && <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-slate-200"><Ban size={10} /> NADA</span>}
+                       {rec.hadSex && rec.didClimax === false && <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-rose-100 italic"><AlertCircle size={10} /> SEM CLÍMAX</span>}
+                       {rec.hadSex && rec.didClimax === true && <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-emerald-100"><Check size={10} strokeWidth={3} /> FINALIZOU</span>}
+                       {rec.hadSex && <span className="px-3 py-1 bg-brand-50 text-brand-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-brand-100"><Heart size={10} fill="currentColor" /> TRANSA</span>}
+                       {rec.masturbated && <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-orange-100"><UserIcon size={10} /> SOLO</span>}
+                       {rec.usedTadala && <span className="px-3 py-1 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-slate-200"><Pill size={10} /> TADALA</span>}
+                       {(rec.periodEnds || rec.periodEnded) && <span className="px-3 py-1 bg-yellow-50 text-yellow-700 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-yellow-200"><Sparkles size={10} /> ACABOU</span>}
+                    </div>
+                 </div>
+              </div>
+           ))}
+           {sortedHistory.length === 0 && <div className="neo-card py-12 text-center text-slate-400 font-bold text-sm opacity-50 italic">Nenhum registro relevante ainda.</div>}
+        </div>
+      </section>
+
+      <footer className="py-12 text-center space-y-6">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-px bg-brand-200 mb-6"></div>
+          <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-2">CONEXÃO <span className="text-brand-200 mx-2">•</span> GESTÃO DE PERFORMANCE</h4>
+          <p className="text-[10px] font-bold text-slate-400">Desenvolvido por André Brito</p>
+        </div>
+        <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
+           <Smartphone size={14} className="text-brand-300" strokeWidth={2.5} /><span className="text-xs font-black tracking-widest text-slate-400">21 994 527 694</span>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+const CheckinModal = ({ 
+  editingDate, todayStr, checkinLibido, setCheckinLibido, 
+  checkinActivities, toggleActivity, checkinPartner, togglePartner, 
+  handleSaveCheckin, onClose 
+}: any) => {
+  const dateObj = new Date(editingDate + 'T12:00:00');
+  const isToday = editingDate === todayStr;
+  const dateTitle = isToday ? "Check-in de Hoje" : `Check-in: ${dateObj.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`;
+
+  return (
+    <div className="bg-white w-full max-w-md mx-auto rounded-[40px] p-8 shadow-2xl animate-in slide-in-from-bottom-10 duration-500 max-h-[90vh] overflow-y-auto border border-white/20 pointer-events-auto">
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 font-display italic tracking-tight">{dateTitle}</h2>
+          {!isToday && <p className="text-[10px] text-brand-500 font-black uppercase tracking-[0.2em] mt-1">Registro Retroativo</p>}
+        </div>
+        <button onClick={onClose} className="w-10 h-10 bg-slate-50 rounded-2xl text-slate-400 hover:bg-brand-50 hover:text-brand-600 transition-all active:scale-90 flex items-center justify-center">
+          <XIcon size={20} strokeWidth={3} />
+        </button>
+      </div>
+      <div className="space-y-8">
+        <div className="space-y-4">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Nível de desejo (Você)</p>
+          <div className="flex justify-between gap-2 bg-slate-50 p-2 rounded-[28px] border border-slate-100">
+            {[1, 2, 3, 4, 5].map((level) => (
+              <button key={level} onClick={() => setCheckinLibido(level)} className={`flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-300 ${checkinLibido === level ? 'scale-110 shadow-xl shadow-brand-600/20 text-white' : 'text-slate-300 hover:bg-white hover:text-slate-200'}`} style={{ backgroundColor: checkinLibido === level ? LIBIDO_META[level].color : 'transparent' }}>
+                <LibidoIcon level={level} size={28} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Suas Atividades</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button key="no-sex" onClick={() => {}} className={`p-5 rounded-[32px] border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-800 border-slate-800 text-white shadow-xl scale-105' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}>
+              <Ban size={28} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Não Rolou</span>
+            </button>
+            <button key="transa" onClick={() => toggleActivity('hadSex')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.hadSex ? 'bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-white border-slate-100 text-slate-400 hover:border-brand-100'}`}>
+              <Heart size={24} fill={checkinActivities.hadSex ? "currentColor" : "none"} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Transa</span>
+            </button>
+            <button key="solo" onClick={() => toggleActivity('masturbated')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.masturbated ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-white border-slate-100 text-slate-400 hover:border-orange-100'}`}>
+              <UserIcon size={24} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Solo</span>
+            </button>
+            <button key="tadala" onClick={() => toggleActivity('usedTadala')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.usedTadala ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+              <Pill size={24} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Tadala</span>
+            </button>
+          </div>
+          {checkinActivities.hadSex && (
+            <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 size={24} className="text-emerald-600" />
+                <div>
+                  <span className="block font-black text-xs text-emerald-900 uppercase tracking-widest">Gozou?</span>
+                  <span className="text-[10px] text-emerald-600 font-bold">{checkinActivities.didClimax ? "Sim, finalizado" : "Não, sem clímax"}</span>
+                </div>
+              </div>
+              <button onClick={() => toggleActivity('didClimax')} className={`w-14 h-8 rounded-full relative transition-all duration-300 ${checkinActivities.didClimax ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 ${checkinActivities.didClimax ? 'left-7' : 'left-1 shadow-sm'}`}></div>
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="bg-brand-50/50 p-6 rounded-[32px] border border-brand-100 space-y-4">
+           <p className="text-xs font-black text-brand-600 uppercase tracking-widest text-center flex items-center justify-center gap-2">
+             <CalendarHeart size={16} /> Ciclo da Marcelly
+           </p>
+           <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => togglePartner('periodStarts')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.periodStarts ? 'bg-brand-600 border-brand-600 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-brand-200'}`}>
+                <Droplets size={20} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Desceu</span>
+              </button>
+              <button onClick={() => togglePartner('periodEnds')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.periodEnds ? 'bg-yellow-500 border-yellow-500 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-yellow-200'}`}>
+                <Sparkles size={20} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Acabou</span>
+              </button>
+              <button onClick={() => togglePartner('medsStarts')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.medsStarts ? 'bg-blue-500 border-blue-500 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-blue-200'}`}>
+                <PlayCircle size={20} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Retomou</span>
+              </button>
+              <button onClick={() => togglePartner('medsEnds')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all ${checkinPartner.medsEnds ? 'bg-orange-400 border-orange-400 text-white shadow-md' : 'bg-white border-white text-slate-400 hover:border-orange-200'}`}>
+                <StopCircle size={20} strokeWidth={3} /><span className="font-black text-[10px] uppercase tracking-widest">Pausa</span>
+              </button>
+           </div>
+        </div>
+        <button onClick={handleSaveCheckin} className="btn-primary w-full text-lg font-black uppercase tracking-widest py-5 rounded-[28px]">
+          {isToday ? "Salvar Hoje" : "Salvar Histórico"}
+        </button>
+      </div>
     </div>
   );
 };
