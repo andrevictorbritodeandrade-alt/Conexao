@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { 
   ResponsiveContainer, AreaChart, Area, Tooltip, XAxis, YAxis, CartesianGrid
 } from 'recharts';
@@ -35,8 +36,14 @@ import {
   Smartphone,
   LogOut,
   LogIn,
-  AlertCircle
+  AlertCircle,
+  MessageSquare,
+  Send,
+  Loader2
 } from 'lucide-react';
+
+// --- Gemini Initialization ---
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // --- Firebase Initialization ---
 const app = initializeApp(firebaseConfig);
@@ -107,6 +114,7 @@ interface Record {
   medsStarts?: boolean;   // Começou cartela
   medsEnds?: boolean;     // Parou cartela (Pausa)
   
+  notes?: string;
   timestamp: number;
 }
 
@@ -182,6 +190,28 @@ const App: React.FC = () => {
     medsStarts: false,
     medsEnds: false
   });
+
+  // AI Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model' | 'system', text: string }[]>([
+    { role: 'model', text: "Olá! O que aconteceu hoje? Pode me contar naturalmente, ex: 'transamos e foi ótimo' ou 'hoje o desejo estava baixo'." }
+  ]);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+  // Sync Chat History with Firestore
+  useEffect(() => {
+    if (!currentUser) return;
+    const chatRef = collection(db, 'users', currentUser.uid, 'chat_history');
+    const q = query(chatRef, orderBy('timestamp', 'asc'));
+    
+    return onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const msgs = snapshot.docs.map(doc => doc.data() as any);
+        setChatMessages(msgs);
+      }
+    });
+  }, [currentUser]);
 
   // Auth Listener
   useEffect(() => {
@@ -441,6 +471,125 @@ const App: React.FC = () => {
 
   const togglePartner = (key: keyof typeof checkinPartner) => {
     setCheckinPartner(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // --- AI Chat Logic ---
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || isAiProcessing) return;
+
+    const userMessage = chatInput.trim();
+    const timestamp = Date.now();
+    
+    // Optimistic Update
+    setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setChatInput("");
+    setIsAiProcessing(true);
+
+    if (currentUser) {
+      await setDoc(doc(db, 'users', currentUser.uid, 'chat_history', timestamp.toString()), {
+        role: 'user',
+        text: userMessage,
+        timestamp
+      });
+    }
+
+    try {
+      const updateRecordFn: FunctionDeclaration = {
+        name: "updatePerformanceRecord",
+        description: "Updates sexual performance record. Convert subjective feelings (sad, happy, horny) to libido levels where 1=lowest, 5=highest.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            date: { type: Type.STRING, description: "YYYY-MM-DD" },
+            hadSex: { type: Type.BOOLEAN },
+            libido: { type: Type.INTEGER, description: "1-5 scale" },
+            masturbated: { type: Type.BOOLEAN },
+            usedTadala: { type: Type.BOOLEAN },
+            didClimax: { type: Type.BOOLEAN },
+            notes: { type: Type.STRING, description: "Personal notes or mood description" }
+          },
+          required: ["date"]
+        }
+      };
+
+      const response = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          { role: 'user', parts: [{ text: `Today is ${todayStr}. Current records: ${JSON.stringify(records.slice(0, 5))}. User message: "${userMessage}"` }] }
+        ],
+        config: {
+          systemInstruction: `You are a discrete, supportive sexual health assistant. 
+          Goal: Log user activities into the record system.
+          - If user mentions sex, set 'hadSex' to true.
+          - Interpret mood/desire into 'libido' (1-5).
+          - Save personal comments in 'notes'.
+          - Default date is today (${todayStr}) unless specified.
+          - If the user just wants to chat, provide a supportive brief response.`,
+          tools: [{ functionDeclarations: [updateRecordFn] }]
+        }
+      });
+
+      const functionCalls = response.functionCalls;
+      if (functionCalls && functionCalls.length > 0) {
+        for (const call of functionCalls) {
+          if (call.name === "updatePerformanceRecord") {
+            const args = call.args as any;
+            const targetDate = args.date || todayStr;
+            const existingRecord = records.find(r => r.date === targetDate);
+            const recordId = existingRecord ? existingRecord.id : Date.now().toString();
+
+            const updatedRecord: Record = {
+              id: recordId,
+              date: targetDate,
+              libido: args.libido ?? (existingRecord?.libido ?? 3),
+              hadSex: args.hadSex ?? (existingRecord?.hadSex ?? false),
+              masturbated: args.masturbated ?? (existingRecord?.masturbated ?? false),
+              usedTadala: args.usedTadala ?? (existingRecord?.usedTadala ?? false),
+              didClimax: args.didClimax ?? (existingRecord?.didClimax ?? (args.hadSex ? true : undefined)),
+              periodStarts: existingRecord?.periodStarts ?? false,
+              periodEnds: existingRecord?.periodEnds ?? false,
+              periodEnded: existingRecord?.periodEnded ?? false,
+              medsStarts: existingRecord?.medsStarts ?? false,
+              medsEnds: existingRecord?.medsEnds ?? false,
+              notes: args.notes ?? existingRecord?.notes,
+              timestamp: existingRecord?.timestamp || new Date(targetDate + 'T12:00:00').getTime()
+            };
+
+            if (currentUser) {
+              await setDoc(doc(db, 'users', currentUser.uid, 'records', recordId), updatedRecord);
+            } else {
+              setRecords(prev => {
+                const idx = prev.findIndex(r => r.date === targetDate);
+                if (idx > -1) {
+                  const newRecs = [...prev];
+                  newRecs[idx] = updatedRecord;
+                  return newRecs;
+                }
+                return [...prev, updatedRecord];
+              });
+            }
+          }
+        }
+      }
+
+      const modelText = response.text || "Registro atualizado com sucesso!";
+      const modelTimestamp = Date.now();
+      
+      if (currentUser) {
+        await setDoc(doc(db, 'users', currentUser.uid, 'chat_history', modelTimestamp.toString()), {
+          role: 'model',
+          text: modelText,
+          timestamp: modelTimestamp
+        });
+      } else {
+        setChatMessages(prev => [...prev, { role: 'model', text: modelText }]);
+      }
+    } catch (e) {
+      console.error("AI Error:", e);
+      setChatMessages(prev => [...prev, { role: 'system', text: "Erro ao processar." }]);
+    } finally {
+      setIsAiProcessing(false);
+    }
   };
 
   // --- Logic: Partner Libido Prediction (Selene Cycle) ---
@@ -728,6 +877,70 @@ const App: React.FC = () => {
                  </div>
               </div>
            </div>
+        </section>
+
+        {/* AI ASSISTANT "CAIXINHA" */}
+        <section className="neo-card p-0 overflow-hidden border-2 border-brand-100 shadow-xl shadow-brand-100/50">
+          <div className="bg-brand-50 p-6 border-b border-brand-100/50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-600/30">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">Assistente Inteligente</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1 italic opacity-70">Log automático via chat</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-h-[300px] overflow-y-auto p-6 space-y-4 bg-slate-50/30 scrollbar-hide">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
+                <div className={`
+                  max-w-[85%] px-5 py-3 rounded-2xl text-sm font-medium shadow-sm transition-all
+                  ${msg.role === 'user' 
+                    ? 'bg-brand-600 text-white rounded-tr-none' 
+                    : msg.role === 'system'
+                      ? 'bg-rose-50 text-rose-600 border border-rose-100 italic text-xs'
+                      : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'}
+                `}>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+            {isAiProcessing && (
+              <div className="flex justify-start">
+                <div className="bg-white/80 backdrop-blur-sm px-5 py-3 rounded-2xl rounded-tl-none border border-slate-100 flex items-center gap-3">
+                   <div className="flex gap-1">
+                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                     <span className="w-1.5 h-1.5 bg-brand-600 rounded-full animate-bounce"></span>
+                   </div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Anotando...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 bg-white border-t border-brand-100/50">
+            <div className="relative">
+              <input 
+                type="text" 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                placeholder="Como foi seu dia hoje?"
+                className="w-full bg-slate-50 border-2 border-transparent rounded-[24px] pl-5 pr-14 py-4 text-sm font-medium placeholder:text-slate-300 focus:bg-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/5 transition-all outline-none"
+              />
+              <button 
+                onClick={handleSendChat}
+                disabled={!chatInput.trim() || isAiProcessing}
+                className="absolute right-2 top-2 w-11 h-11 bg-brand-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-brand-600/30 active:scale-90 transition-all hover:bg-brand-700 disabled:bg-slate-200"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* CALENDAR CARD */}
