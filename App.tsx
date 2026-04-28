@@ -96,6 +96,7 @@ interface Record {
   libido: number;
   masturbated: boolean;
   usedTadala: boolean;
+  didClimax?: boolean;
   
   // Legacy support (will be treated as periodEnds)
   periodEnded: boolean; 
@@ -170,7 +171,8 @@ const App: React.FC = () => {
   const [checkinActivities, setCheckinActivities] = useState({
     hadSex: false,
     masturbated: false,
-    usedTadala: false
+    usedTadala: false,
+    didClimax: true // Default to true when adding new sex record
   });
 
   // Partner Activities (Marcelly)
@@ -207,20 +209,53 @@ const App: React.FC = () => {
     if (!currentUser) {
       // If not logged in, load from localStorage if available
       const saved = localStorage.getItem('conexao_v7_data');
+      let loadedRecords: Record[] = [];
+      
       if (saved) {
         try {
-          const loadedRecords = JSON.parse(saved);
-          setRecords(loadedRecords);
+          loadedRecords = JSON.parse(saved);
         } catch (e) {
           console.error("Erro ao carregar do localStorage", e);
         }
+      }
+
+      // Force include the requested April records to ensure they appear for the user
+      const requestedDates = ['2026-04-23', '2026-04-26', '2026-04-27'];
+      let modified = false;
+      
+      requestedDates.forEach(d => {
+        if (!loadedRecords.some(r => r.date === d)) {
+          loadedRecords.push({
+            id: 'req-' + d,
+            date: d,
+            hadSex: true,
+            libido: 1,
+            masturbated: false,
+            usedTadala: false,
+            didClimax: false,
+            periodEnds: d === '2026-04-23',
+            timestamp: new Date(d + 'T12:00:00').getTime(),
+            periodEnded: d === '2026-04-23'
+          });
+          modified = true;
+        }
+      });
+
+      if (loadedRecords.length > 0) {
+        setRecords(loadedRecords);
       } else {
         // Default initial data logic if needed
         const currentYear = new Date().getFullYear();
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
         const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+        
         const initialData: Record[] = [
+          // User requested records
+          { id: 'req1', date: '2026-04-23', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, periodEnds: true, timestamp: Date.parse('2026-04-23') },
+          { id: 'req2', date: '2026-04-26', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, timestamp: Date.parse('2026-04-26') },
+          { id: 'req3', date: '2026-04-27', hadSex: true, libido: 1, masturbated: false, usedTadala: false, didClimax: false, timestamp: Date.parse('2026-04-27') },
+          
           { id: 'm1', date: `${currentYear}-03-24`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-24`) },
           { id: 'm2', date: `${currentYear}-03-25`, hadSex: true, libido: 5, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-25`) },
           { id: 'm3', date: `${currentYear}-03-10`, hadSex: true, libido: 4, masturbated: false, usedTadala: false, periodEnded: false, timestamp: Date.parse(`${currentYear}-03-10`) },
@@ -249,6 +284,28 @@ const App: React.FC = () => {
 
     // Real-time Firestore Sync
     const recordsRef = collection(db, 'users', currentUser.uid, 'records');
+    
+    // Ensure those specific requested records exist in Firestore as well
+    const requestedDates = ['2026-04-23', '2026-04-26', '2026-04-27'];
+    requestedDates.forEach(async (d) => {
+      const exists = records.some(r => r.date === d);
+      if (!exists) {
+        const id = 'req-' + d;
+        await setDoc(doc(db, 'users', currentUser.uid, 'records', id), {
+          id,
+          date: d,
+          hadSex: true,
+          libido: 1,
+          masturbated: false,
+          usedTadala: false,
+          didClimax: false,
+          periodEnds: d === '2026-04-23',
+          timestamp: new Date(d + 'T12:00:00').getTime(),
+          periodEnded: d === '2026-04-23'
+        });
+      }
+    });
+
     const q = query(recordsRef, orderBy('timestamp', 'desc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -318,6 +375,7 @@ const App: React.FC = () => {
         hadSex: existingRecord.hadSex,
         masturbated: existingRecord.masturbated,
         usedTadala: existingRecord.usedTadala,
+        didClimax: existingRecord.didClimax !== undefined ? existingRecord.didClimax : true
       });
       setCheckinPartner({
         periodStarts: existingRecord.periodStarts || false,
@@ -327,7 +385,7 @@ const App: React.FC = () => {
       });
     } else {
       setCheckinLibido(3);
-      setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false });
+      setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false, didClimax: true });
       setCheckinPartner({ periodStarts: false, periodEnds: false, medsStarts: false, medsEnds: false });
     }
     setIsCheckinOpen(true);
@@ -345,7 +403,10 @@ const App: React.FC = () => {
       id: recordId,
       date: editingDate,
       libido: checkinLibido,
-      ...checkinActivities,
+      hadSex: checkinActivities.hadSex,
+      masturbated: checkinActivities.masturbated,
+      usedTadala: checkinActivities.usedTadala,
+      didClimax: checkinActivities.hadSex ? checkinActivities.didClimax : undefined,
       periodStarts: checkinPartner.periodStarts,
       periodEnds: checkinPartner.periodEnds,
       periodEnded: checkinPartner.periodEnds, 
@@ -476,7 +537,7 @@ const App: React.FC = () => {
             {/* Libido Selection */}
             <div className="space-y-4">
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Nível de desejo (Você)</p>
-              <div className="flex justify-between gap-2 bg-slate-50 p-2 rounded-[28px]">
+              <div className="flex justify-between gap-2 bg-slate-50 p-2 rounded-[28px] border border-slate-100">
                 {[1, 2, 3, 4, 5].map((level) => (
                   <button 
                     key={level} 
@@ -485,14 +546,11 @@ const App: React.FC = () => {
                       flex-1 aspect-square rounded-2xl flex items-center justify-center transition-all duration-300
                       ${checkinLibido === level 
                         ? 'scale-110 shadow-xl shadow-brand-600/20 text-white' 
-                        : 'text-slate-300 hover:bg-white hover:text-slate-400'}
+                        : 'text-slate-300 hover:bg-white hover:text-slate-200'}
                     `}
                     style={{ backgroundColor: checkinLibido === level ? LIBIDO_META[level].color : 'transparent' }}
                   >
-                    {LIBIDO_META[level].icon === 'Frown' && <Frown size={32} />}
-                    {LIBIDO_META[level].icon === 'Meh' && <Meh size={32} />}
-                    {LIBIDO_META[level].icon === 'Smile' && <Smile size={32} />}
-                    {LIBIDO_META[level].icon === 'Flame' && <Flame size={32} fill={checkinLibido === 5 ? "currentColor" : "none"} />}
+                    <LibidoIcon level={level} size={28} />
                   </button>
                 ))}
               </div>
@@ -502,11 +560,11 @@ const App: React.FC = () => {
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">Suas Atividades</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button 
-                  onClick={() => setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false })} 
-                  className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-400 border-slate-400 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                  onClick={() => setCheckinActivities({ hadSex: false, masturbated: false, usedTadala: false, didClimax: true })} 
+                  className={`p-5 rounded-[32px] border-2 flex flex-col items-center gap-2 transition-all ${(!checkinActivities.hadSex && !checkinActivities.masturbated && !checkinActivities.usedTadala) ? 'bg-slate-800 border-slate-800 text-white shadow-xl scale-105' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
                 >
-                  <Ban size={24} strokeWidth={3} />
-                  <span className="font-black text-[10px] uppercase tracking-widest">Nada</span>
+                  <Ban size={28} strokeWidth={3} />
+                  <span className="font-black text-[10px] uppercase tracking-widest">Não Rolou</span>
                 </button>
                 <button onClick={() => toggleActivity('hadSex')} className={`p-4 rounded-3xl border-2 flex flex-col items-center gap-2 transition-all ${checkinActivities.hadSex ? 'bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-white border-slate-100 text-slate-400 hover:border-brand-100'}`}>
                   <Heart size={24} fill={checkinActivities.hadSex ? "currentColor" : "none"} strokeWidth={3} />
@@ -521,6 +579,25 @@ const App: React.FC = () => {
                   <span className="font-black text-[10px] uppercase tracking-widest">Tadala</span>
                 </button>
               </div>
+              
+              {/* Climax Toggle - Show only if Sex occurred */}
+              {checkinActivities.hadSex && (
+                <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100 animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 size={24} className="text-emerald-600" />
+                    <div>
+                      <span className="block font-black text-xs text-emerald-900 uppercase tracking-widest">Gozou?</span>
+                      <span className="text-[10px] text-emerald-600 font-bold">{checkinActivities.didClimax ? "Sim, finalizado" : "Não, sem clímax"}</span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => toggleActivity('didClimax')}
+                    className={`w-14 h-8 rounded-full relative transition-all duration-300 ${checkinActivities.didClimax ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 ${checkinActivities.didClimax ? 'left-7' : 'left-1 shadow-sm'}`}></div>
+                  </button>
+                </div>
+              )}
             </div>
             {/* Partner Cycle */}
             <div className="bg-brand-50/50 p-6 rounded-[32px] border border-brand-100 space-y-4">
@@ -580,7 +657,7 @@ const App: React.FC = () => {
     }
 
     const uniqueDaysWithSex = new Set(
-      records.filter(r => r.hadSex && new Date(r.date).getFullYear() === year).map(r => r.date)
+      records.filter(r => r.hadSex && new Date(r.date + 'T12:00:00').getFullYear() === year).map(r => r.date)
     ).size;
     const sexPercentage = daysPassed > 0 ? ((uniqueDaysWithSex / daysPassed) * 100).toFixed(1) : '0.0';
 
@@ -689,7 +766,11 @@ const App: React.FC = () => {
                     className={`
                       aspect-square flex flex-col items-center justify-center rounded-2xl relative transition-all cursor-pointer hover:scale-110 active:scale-90
                       ${hasRecord 
-                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30' 
+                        ? rec?.hadSex 
+                          ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30' 
+                          : rec?.masturbated 
+                            ? 'bg-orange-500 text-white shadow-md' 
+                            : 'bg-white border-2 border-slate-200 text-slate-400' 
                         : isToday 
                           ? 'bg-slate-900 text-white shadow-xl ring-4 ring-slate-100' 
                           : 'bg-slate-50 text-slate-400 hover:bg-brand-50 hover:text-brand-600'}
@@ -698,8 +779,18 @@ const App: React.FC = () => {
                     <span className="text-xs font-black font-display">{day}</span>
                     
                     {rec?.hadSex && (
-                      <div className="absolute -bottom-1 -right-1 text-orange-400 drop-shadow-md">
-                        <Flame size={14} fill="currentColor" />
+                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-brand-600 shadow-sm border border-brand-100 animate-pulse">
+                        <Flame size={12} fill="currentColor" />
+                      </div>
+                    )}
+                    {!rec?.hadSex && rec?.masturbated && (
+                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-orange-500 shadow-sm border border-orange-100">
+                        <UserIcon size={12} />
+                      </div>
+                    )}
+                    {!rec?.hadSex && !rec?.masturbated && hasRecord && (
+                      <div className="absolute -top-1 -right-1 bg-white p-1 rounded-full text-slate-400 shadow-sm border border-slate-100 font-black flex items-center justify-center">
+                        <Ban size={10} />
                       </div>
                     )}
                     {(rec?.periodEnds || rec?.periodEnded) && (
@@ -818,6 +909,16 @@ const App: React.FC = () => {
                          {!rec.hadSex && !rec.masturbated && !rec.usedTadala && (
                            <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-slate-200">
                               <Ban size={10} /> NADA
+                           </span>
+                         )}
+                         {rec.hadSex && rec.didClimax === false && (
+                           <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-rose-100 italic">
+                              <AlertCircle size={10} /> SEM CLÍMAX
+                           </span>
+                         )}
+                         {rec.hadSex && rec.didClimax === true && (
+                           <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black flex items-center gap-1.5 border border-emerald-100">
+                              <Check size={10} strokeWidth={3} /> FINALIZOU
                            </span>
                          )}
                          {rec.hadSex && (
